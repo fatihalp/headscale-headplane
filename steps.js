@@ -23,38 +23,7 @@ const STEPS = [
     },
     {
         id: 3,
-        title: "Step 3: Docker Compose Installation",
-        desc: "Alternatively, run everything using Docker Compose.",
-        text: `<p>If you prefer Docker, save the configuration below as <code>docker-compose.yaml</code> and run:</p>
-        <pre class="mt-2 bg-stone-100 text-stone-800 rounded p-3 font-mono text-sm">docker-compose up -d</pre>
-        <p class="mt-4 text-xs text-stone-500 italic">Note: You must have a <code>config.yaml</code> file in a <code>./config</code> directory before starting.</p>`,
-        code: `version: '3.9'
-services:
-  headscale:
-    image: headscale/headscale:{{HEADSCALE_VERSION}}
-    container_name: headscale
-    volumes:
-      - ./config:/etc/headscale
-      - ./data:/var/lib/headscale
-    ports:
-      - "8080:8080"
-      - "50443:50443"
-    command: headscale serve
-    restart: always
-
-  headplane:
-    image: ghcr.io/tale/headplane:latest
-    container_name: headplane
-    ports:
-      - "3000:3000"
-    environment:
-      - HEADSCALE_URL=http://headscale:8080
-      - COOKIE_SECRET=use-a-strong-secret-here
-    restart: always`
-    },
-    {
-        id: 4,
-        title: "Step 4: Client Connection",
+        title: "Step 3: Client Connection",
         desc: "Add your devices to the network.",
         text: `<p class="text-sm mb-4">First install the Tailscale client, then connect to your server.
 You can access the panel at <code>http(s)://{{UI_DOMAIN}}</code>.</p>`,

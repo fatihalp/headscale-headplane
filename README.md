@@ -40,14 +40,6 @@ You can run the interactive guide locally with:
 npm start
 ```
 
-### Alternative: Docker Installation
-
-If you prefer using Docker, save the [docker-compose.yaml](./docker-compose.yaml) to your server and run:
-
-```bash
-docker-compose up -d
-```
-
 ---
 
 ### 2. Fill in the wizard fields
