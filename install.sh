@@ -401,6 +401,18 @@ stdout_logfile=/var/log/supervisor/headplane.out.log
 user=root
 SUPERVISORCFG
 
+cat > /etc/supervisor/conf.d/nginx.conf <<'SUPERVISORCFG'
+[program:nginx]
+command=/usr/sbin/nginx -g "daemon off;"
+autostart=true
+autorestart=true
+startretries=5
+stopwaitsecs=10
+stderr_logfile=/var/log/supervisor/nginx.err.log
+stdout_logfile=/var/log/supervisor/nginx.out.log
+user=root
+SUPERVISORCFG
+
 supervisorctl update
 supervisorctl restart headplane 2>/dev/null || supervisorctl start headplane
 
@@ -458,7 +470,7 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo -e "${BOLD}${GREEN}  INSTALLATION COMPLETE!${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════${NC}"
 echo -e "  VPN Server    : ${BOLD}${PROTO}://${DOMAIN}${NC}"
-echo -e "  Control Panel : ${BOLD}${PROTO}://${UI_DOMAIN}${NC}"
+echo -e "  Control Panel : ${BOLD}${PROTO}://${UI_DOMAIN}/admin/${NC}"
 echo -e "  Username      : ${BOLD}admin${NC}"
 echo -e "  Password      : ${BOLD}${ADMIN_PASS}${NC}"
 echo -e "  Log file      : ${DIM}${LOG_FILE}${NC}"

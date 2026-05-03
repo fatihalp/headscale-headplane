@@ -1,0 +1,9 @@
+services:
+  headscale:
+    build: .
+    container_name: headscale-local
+    ports:
+      - "8080:80"
+    command: ["sleep", "infinity"]
+    tty: true
+    stdin_open: true
