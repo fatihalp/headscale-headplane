@@ -61,7 +61,10 @@ echo "=================================================="
 echo "0/4: Updating system and installing dependencies..."
 apt-get update
 apt-get install -y curl gnupg git wget jq
+# Remove old nodesource lists to ensure clean downgrade if needed
+rm -f /etc/apt/sources.list.d/nodesource.list
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get remove -y nodejs || true
 apt-get install -y nodejs nginx supervisor certbot python3-certbot-nginx
 
 # ------------------------------------------------------------------------------
@@ -215,22 +218,25 @@ if [[ -z "$HEADSCALE_KEY" ]]; then
     exit 1
 fi
 
-cat > /opt/headplane/.env <<EOF
-HEADSCALE_URL=http://127.0.0.1:8080
-HEADSCALE_API_KEY=${HEADSCALE_KEY}
-COOKIE_SECRET=${COOKIE_SECRET}
-DISABLE_OIDC=true
-ADMIN_USERS=admin
-BASIC_AUTH_USER=admin
-BASIC_AUTH_PASS=${ADMIN_PASS}
+mkdir -p /etc/headplane
+cat > /etc/headplane/config.yaml <<EOF
+headscale:
+  url: http://127.0.0.1:8080
+  api_key: "${HEADSCALE_KEY}"
+server:
+  cookie_secret: "${COOKIE_SECRET}"
+  disable_oidc: true
+  admin_users:
+    - admin
+auth:
+  basic:
+    user: admin
+    pass: "${ADMIN_PASS}"
 EOF
 
-# Create headplane startup wrapper (sources .env, uses correct build output path)
+# Create headplane startup wrapper
 cat > /opt/headplane/start.sh <<'STARTSH'
 #!/bin/bash
-set -a
-source /opt/headplane/.env
-set +a
 exec /usr/bin/node /opt/headplane/build/server/index.js
 STARTSH
 chmod +x /opt/headplane/start.sh
