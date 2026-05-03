@@ -192,7 +192,7 @@ nginx -t && service nginx reload
 echo "3/4: Installing Headplane App (this may take a few minutes)..."
 
 cd /opt && rm -rf headplane
-git clone --depth 1 --branch "${HEADPLANE_TAG}" https://github.com/tale/headplane.git
+git -c advice.detachedHead=false clone --depth 1 --branch "${HEADPLANE_TAG}" https://github.com/tale/headplane.git
 cd headplane
 npm install -g pnpm
 pnpm install
