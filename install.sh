@@ -293,6 +293,7 @@ EOF
 ln -sf /etc/nginx/sites-available/headscale /etc/nginx/sites-enabled/headscale
 rm -f /etc/nginx/sites-enabled/default
 nginx -t || fail "Nginx config test failed for headscale vhost."
+# start nginx if not yet running, otherwise reload live config
 nginx -s reload 2>/dev/null || service nginx start
 ok "Nginx configured for ${DOMAIN}"
 
@@ -424,6 +425,7 @@ server {
 EOF
 ln -sf /etc/nginx/sites-available/headplane /etc/nginx/sites-enabled/headplane
 nginx -t || fail "Nginx config test failed for headplane vhost."
+# start nginx if not yet running, otherwise reload live config
 nginx -s reload 2>/dev/null || service nginx start
 ok "Nginx configured for ${UI_DOMAIN}"
 
