@@ -293,7 +293,7 @@ EOF
 ln -sf /etc/nginx/sites-available/headscale /etc/nginx/sites-enabled/headscale
 rm -f /etc/nginx/sites-enabled/default
 nginx -t || fail "Nginx config test failed for headscale vhost."
-service nginx reload
+nginx -s reload 2>/dev/null || service nginx start
 ok "Nginx configured for ${DOMAIN}"
 
 if [[ "$PROTO" == "https" ]]; then
@@ -424,7 +424,7 @@ server {
 EOF
 ln -sf /etc/nginx/sites-available/headplane /etc/nginx/sites-enabled/headplane
 nginx -t || fail "Nginx config test failed for headplane vhost."
-service nginx reload
+nginx -s reload 2>/dev/null || service nginx start
 ok "Nginx configured for ${UI_DOMAIN}"
 
 if [[ "$PROTO" == "https" ]]; then
