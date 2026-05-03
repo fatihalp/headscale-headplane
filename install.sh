@@ -99,11 +99,11 @@ if [[ -z "$INSTALL_SSL" ]]; then
 fi
 
 if [[ -z "$ADMIN_PASS" ]]; then
-    ADMIN_PASS=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)
+    ADMIN_PASS=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 20 || true)
     warn "No --admin-pass provided. Generated: ${BOLD}${ADMIN_PASS}${NC}  ← save this!"
 fi
 
-COOKIE_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+COOKIE_SECRET=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32 || true)
 
 # Resolve protocol once — avoids the "http${INSTALL_SSL:+s}" pitfall
 if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then PROTO="https"; else PROTO="http"; fi
