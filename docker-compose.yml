@@ -3,7 +3,8 @@ services:
     build: .
     container_name: headscale-local
     ports:
-      - "8080:80"
+      - "8080:80"    # VPN  — host:8080 → nginx → headscale
+      - "3000:3000"  # UI   — host:3000 → headplane (direct)
     command: ["sleep", "infinity"]
     tty: true
     stdin_open: true

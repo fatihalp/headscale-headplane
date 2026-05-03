@@ -109,10 +109,10 @@ if [[ -z "$ADMIN_PASS" ]]; then
     warn "No --admin-pass provided. Generated: ${BOLD}${ADMIN_PASS}${NC}  ← save this!"
 fi
 
-COOKIE_SECRET=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32 || true)
+COOKIE_SECRET=$(openssl rand -base64 64 | tr -dc 'A-Za-z0-9' | head -c 32 || true)
 
 # Resolve protocol once — avoids the "http${INSTALL_SSL:+s}" pitfall
-if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then PROTO="https"; else PROTO="http"; fi
+if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then PROTO="https"; COOKIE_SECURE="true"; else PROTO="http"; COOKIE_SECURE="false"; fi
 
 # Bootstrap minimal network tooling before preflight
 if ! command -v curl >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
@@ -361,20 +361,22 @@ if [[ -z "$HEADSCALE_KEY" ]]; then
 fi
 ok "Headscale API key created"
 
-mkdir -p /etc/headplane
+mkdir -p /etc/headplane /var/lib/headplane
 cat > /etc/headplane/config.yaml <<EOF
 headscale:
   url: http://127.0.0.1:8080
-  api_key: "${HEADSCALE_KEY}"
+  config_path: /etc/headscale/config.yaml
+  config_strict: false
 server:
+  host: "0.0.0.0"
+  port: 3000
+  base_url: "${PROTO}://${UI_DOMAIN}"
   cookie_secret: "${COOKIE_SECRET}"
-  disable_oidc: true
-  admin_users:
-    - admin
-auth:
-  basic:
-    user: admin
-    pass: "${ADMIN_PASS}"
+  cookie_secure: ${COOKIE_SECURE}
+  data_path: "/var/lib/headplane"
+integration:
+  proc:
+    enabled: true
 EOF
 chmod 600 /etc/headplane/config.yaml
 ok "Headplane config written to /etc/headplane/config.yaml"
@@ -382,8 +384,6 @@ ok "Headplane config written to /etc/headplane/config.yaml"
 # Startup wrapper — exports config path so headplane can locate it
 cat > /opt/headplane/start.sh <<'STARTSH'
 #!/bin/bash
-export HEADPLANE_CONFIG=/etc/headplane/config.yaml
-export CONFIG_FILE=/etc/headplane/config.yaml
 exec /usr/bin/node /opt/headplane/build/server/index.js
 STARTSH
 chmod +x /opt/headplane/start.sh
@@ -432,7 +432,56 @@ ok "Headplane running (supervisor: RUNNING)"
 # ════════════════════════════════════════════════════════════
 step 4 "Nginx reverse-proxy for Headplane"
 
-cat > /etc/nginx/sites-available/headplane <<EOF
+if [[ "$DOMAIN" == "$UI_DOMAIN" ]]; then
+    # ── Same domain: single combined vhost, route by path ─────────────────
+    # /admin/* → headplane:3000   |   everything else → headscale:8080
+    cat > /etc/nginx/sites-available/headscale <<EOF
+server {
+    listen 80 default_server;
+    server_name ${DOMAIN} _;
+
+    # Headplane UI — path-based
+    location ^~ /admin {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+    }
+
+    # Headscale VPN — everything else
+    location / {
+        proxy_pass         http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+    }
+}
+EOF
+    # Remove the stale headplane vhost if it exists from a prior run
+    rm -f /etc/nginx/sites-enabled/headplane /etc/nginx/sites-available/headplane
+    ln -sf /etc/nginx/sites-available/headscale /etc/nginx/sites-enabled/headscale
+    nginx -t || fail "Nginx config test failed (combined vhost)."
+    nginx -s reload 2>/dev/null || service nginx start
+    ok "Nginx combined vhost: / → Headscale, /admin → Headplane (${DOMAIN})"
+
+    if [[ "$PROTO" == "https" ]]; then
+        info "Requesting Let's Encrypt certificate for ${DOMAIN}…"
+        certbot --nginx --non-interactive --agree-tos \
+            --register-unsafely-without-email -d "${DOMAIN}" \
+            || warn "Certbot failed for ${DOMAIN}. Check DNS propagation and try manually."
+        ok "SSL certificate installed for ${DOMAIN}"
+    fi
+else
+    # ── Different domains: separate nginx vhosts ───────────────────────────
+    cat > /etc/nginx/sites-available/headplane <<EOF
 server {
     listen 80;
     server_name ${UI_DOMAIN};
@@ -448,18 +497,18 @@ server {
     }
 }
 EOF
-ln -sf /etc/nginx/sites-available/headplane /etc/nginx/sites-enabled/headplane
-nginx -t || fail "Nginx config test failed for headplane vhost."
-# start nginx if not yet running, otherwise reload live config
-nginx -s reload 2>/dev/null || service nginx start
-ok "Nginx configured for ${UI_DOMAIN}"
+    ln -sf /etc/nginx/sites-available/headplane /etc/nginx/sites-enabled/headplane
+    nginx -t || fail "Nginx config test failed for headplane vhost."
+    nginx -s reload 2>/dev/null || service nginx start
+    ok "Nginx configured for ${UI_DOMAIN}"
 
-if [[ "$PROTO" == "https" ]]; then
-    info "Requesting Let's Encrypt certificate for ${UI_DOMAIN}…"
-    certbot --nginx --non-interactive --agree-tos \
-        --register-unsafely-without-email -d "${UI_DOMAIN}" \
-        || warn "Certbot failed for ${UI_DOMAIN}. Check DNS propagation and try manually."
-    ok "SSL certificate installed for ${UI_DOMAIN}"
+    if [[ "$PROTO" == "https" ]]; then
+        info "Requesting Let's Encrypt certificate for ${UI_DOMAIN}…"
+        certbot --nginx --non-interactive --agree-tos \
+            --register-unsafely-without-email -d "${UI_DOMAIN}" \
+            || warn "Certbot failed for ${UI_DOMAIN}. Check DNS propagation and try manually."
+        ok "SSL certificate installed for ${UI_DOMAIN}"
+    fi
 fi
 
 # ════════════════════════════════════════════════════════════
@@ -469,10 +518,16 @@ echo ""
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}${GREEN}  INSTALLATION COMPLETE!${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════${NC}"
-echo -e "  VPN Server    : ${BOLD}${PROTO}://${DOMAIN}${NC}"
-echo -e "  Control Panel : ${BOLD}${PROTO}://${UI_DOMAIN}/admin/${NC}"
-echo -e "  Username      : ${BOLD}admin${NC}"
-echo -e "  Password      : ${BOLD}${ADMIN_PASS}${NC}"
+if [[ "$DOMAIN" == "$UI_DOMAIN" ]]; then
+    echo -e "  VPN Server    : ${BOLD}${PROTO}://${DOMAIN}${NC}"
+    echo -e "  Control Panel : ${BOLD}${PROTO}://${DOMAIN}/admin/${NC}  ${DIM}← same host, path-based${NC}"
+    echo -e "  ${DIM}  (Docker users: http://localhost:8080/admin/ or http://localhost:3000/admin/)${NC}"
+else
+    echo -e "  VPN Server    : ${BOLD}${PROTO}://${DOMAIN}${NC}"
+    echo -e "  Control Panel : ${BOLD}${PROTO}://${UI_DOMAIN}/admin/${NC}"
+fi
+echo -e "  API Key       : ${BOLD}${HEADSCALE_KEY}${NC}"
+echo -e "  ${DIM}(Use the API key to sign in at the Control Panel)${NC}"
 echo -e "  Log file      : ${DIM}${LOG_FILE}${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════${NC}"
 echo ""
