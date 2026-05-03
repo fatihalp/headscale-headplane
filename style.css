@@ -1,0 +1,54 @@
+/* ============================================================
+ * Base styles
+ * ============================================================ */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #fafaf9;
+    color: #292524;
+}
+
+/* ============================================================
+ * Step navigation: active / inactive state
+ * ============================================================ */
+.step-active {
+    background-color: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+.step-inactive {
+    background-color: #ffffff;
+    color: #57534e;
+    border-color: #d6d3d1;
+}
+.step-inactive:hover {
+    background-color: #f5f5f4;
+}
+
+/* ============================================================
+ * Code block + copy button
+ * ============================================================ */
+.code-block {
+    background-color: #1c1917;
+    color: #e7e5e4;
+    font-family: monospace;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: #44403c;
+    color: #fafaf9;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.copy-btn:hover {
+    background-color: #57534e;
+}
