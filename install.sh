@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# Headscale + Headplane — Ubuntu 24.04 Standalone Installer
+# Headscale + Headplane — Ubuntu 24.04 Standalone Installer (v2)
 # Usage: bash install.sh [--domain head.example.com] [--ui-domain headscale.example.com]
 #        [--admin-pass yourpassword] [--headscale-version 0.28.0]
 #        [--headplane-tag v0.6.2] [--no-ssl] [--ssl]
