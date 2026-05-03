@@ -10,8 +10,8 @@ set -eu
 # ------------------------------------------------------------------------------
 # Defaults (override via args or env vars set by the web wizard)
 # ------------------------------------------------------------------------------
-DOMAIN="${DOMAIN:-head.example.com}"
-UI_DOMAIN="${UI_DOMAIN:-headscale.example.com}"
+DOMAIN="${DOMAIN:-headscale.visiosoft.com.tr}"
+UI_DOMAIN="${UI_DOMAIN:-head.visiosoft.com.tr}"
 ADMIN_PASS="${ADMIN_PASS:-}"
 HEADSCALE_VERSION="${HEADSCALE_VERSION:-0.28.0}"
 HEADPLANE_TAG="${HEADPLANE_TAG:-v0.6.2}"
@@ -89,7 +89,6 @@ grep "${HEADSCALE_BIN}\$" /tmp/headscale.sha256 \
     || { echo "ERROR: Checksum verification failed! Aborting."; exit 1; }
 
 install -m 0755 /tmp/headscale /usr/local/bin/headscale
-/usr/local/bin/headscale version || echo "HEADSCALE FAILED TO RUN"
 rm /tmp/headscale /tmp/headscale.sha256
 
 mkdir -p /etc/headscale /var/lib/headscale /var/run/headscale
@@ -102,7 +101,6 @@ else
     sed -i "s|server_url: .*|server_url: http://${DOMAIN}|g"  /etc/headscale/config.yaml
 fi
 sed -i "s|listen_addr: .*|listen_addr: 127.0.0.1:8080|g" /etc/headscale/config.yaml
-sed -i "s|# grpc_listen_addr: .*|grpc_listen_addr: 127.0.0.1:50443|g" /etc/headscale/config.yaml
 
 # ------------------------------------------------------------------------------
 # 2/4  Headscale supervisor service + Nginx reverse-proxy
@@ -121,11 +119,11 @@ stdout_logfile=/var/log/supervisor/headscale.out.log
 user=root
 EOF
 
-# Debug: run headscale directly to see if it starts
-echo "DEBUG: Starting headscale directly..."
-/usr/local/bin/headscale serve -c /etc/headscale/config.yaml &
-sleep 5
-pkill headscale || true
+# Start supervisord if not running (crucial for Docker/WSL)
+if ! pgrep -x supervisord > /dev/null; then
+    /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+    sleep 2
+fi
 
 supervisorctl update
 supervisorctl restart headscale
