@@ -1,0 +1,12 @@
+{
+  "name": "headscale-install-guide",
+  "version": "1.0.0",
+  "description": "Headscale & Headplane Ubuntu 24.04 Installation Guide",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["headscale", "headplane", "vpn", "tailscale"],
+  "license": "MIT"
+}

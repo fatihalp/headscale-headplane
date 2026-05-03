@@ -31,8 +31,8 @@ const dom = {
 function applyPlaceholders(str) {
     if (!str) return '';
     return str
-        .replace(/\{\{DOMAIN\}\}/g,            dom.domainInput.value.trim()           || 'head.example.com')
-        .replace(/\{\{UI_DOMAIN\}\}/g,         dom.uiDomainInput.value.trim()         || 'headscale.example.com')
+        .replace(/\{\{DOMAIN\}\}/g,            dom.domainInput.value.trim()           || 'headscale.visiosoft.com.tr')
+        .replace(/\{\{UI_DOMAIN\}\}/g,         dom.uiDomainInput.value.trim()         || 'head.visiosoft.com.tr')
         .replace(/\{\{ADMIN_PASS\}\}/g,        dom.adminPassInput.value.trim()        || 'enter_password')
         .replace(/\{\{HEADSCALE_VERSION\}\}/g, dom.headscaleVersionInput.value.trim() || '0.28.0')
         .replace(/\{\{HEADPLANE_TAG\}\}/g,     dom.headplaneVersionInput.value.trim() || 'v0.6.2');
