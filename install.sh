@@ -95,13 +95,23 @@ mkdir -p /etc/headscale /var/lib/headscale /var/run/headscale
 curl -so /etc/headscale/config.yaml \
   "https://raw.githubusercontent.com/juanfont/headscale/v${HEADSCALE_VERSION}/config-example.yaml"
 
+# Sanitize config: use line-start anchor to avoid touching comment lines
 if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
     sed -i "s|^server_url: .*|server_url: https://${DOMAIN}|g" /etc/headscale/config.yaml
 else
     sed -i "s|^server_url: .*|server_url: http://${DOMAIN}|g"  /etc/headscale/config.yaml
 fi
-sed -i "s|^listen_addr: .*|listen_addr: 127.0.0.1:8080|g" /etc/headscale/config.yaml
+sed -i "s|^listen_addr: .*|listen_addr: 127.0.0.1:8080|g"       /etc/headscale/config.yaml
 sed -i "s|^grpc_listen_addr: .*|grpc_listen_addr: 127.0.0.1:50443|g" /etc/headscale/config.yaml
+
+# Verify config is valid before handing off to supervisor
+echo "Validating Headscale config..."
+headscale -c /etc/headscale/config.yaml version || {
+    echo "ERROR: Headscale binary failed to run. Config or binary issue."
+    echo "Config dump:"
+    cat /etc/headscale/config.yaml
+    exit 1
+}
 
 # ------------------------------------------------------------------------------
 # 2/4  Headscale supervisor service + Nginx reverse-proxy
@@ -120,27 +130,41 @@ stdout_logfile=/var/log/supervisor/headscale.out.log
 user=root
 EOF
 
-# Ensure port 8080 is clear (might be held by a failed process)
+# Kill any existing headscale that might hold port 8080 (idempotent re-runs)
+supervisorctl stop headscale 2>/dev/null || true
+pkill -f "headscale serve" 2>/dev/null || true
+sleep 2
+
+# Ensure port 8080 is clear
 if command -v fuser >/dev/null 2>&1; then
-    fuser -k 8080/tcp || true
+    fuser -k 8080/tcp 2>/dev/null || true
 fi
 
-# Start supervisord if not running
+# Ensure supervisord is running
 if ! pgrep -x supervisord > /dev/null; then
     if [ -f /etc/init.d/supervisor ]; then
         /etc/init.d/supervisor start
     else
         /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
     fi
-    sleep 2
 fi
+sleep 3
 
 supervisorctl update
-supervisorctl start headscale || {
-    echo "ERROR: Headscale failed to start (spawn error). Showing error logs:"
+sleep 2
+
+supervisorctl start headscale
+sleep 5
+
+HS_STATUS=$(supervisorctl status headscale | awk '{print $2}')
+if [[ "$HS_STATUS" != "RUNNING" ]]; then
+    echo "ERROR: Headscale failed to start. Status: $HS_STATUS"
+    echo "--- headscale error log ---"
     cat /var/log/supervisor/headscale.err.log
+    echo "---"
     exit 1
-}
+fi
+echo "Headscale is running."
 
 cat > /etc/nginx/sites-available/headscale <<EOF
 server {
@@ -175,10 +199,21 @@ pnpm install
 pnpm run build
 
 echo "Waiting for Headscale socket to be ready..."
-sleep 8
+for i in $(seq 1 15); do
+    if headscale -c /etc/headscale/config.yaml apikeys list >/dev/null 2>&1; then
+        echo "Headscale socket ready after ${i}s."
+        break
+    fi
+    sleep 2
+done
 
-HEADSCALE_KEY=$(headscale -c /etc/headscale/config.yaml apikeys create -e 90d) \
-    || { echo "ERROR: Failed to create API key. Is headscale running?"; exit 1; }
+HEADSCALE_KEY=$(headscale -c /etc/headscale/config.yaml apikeys create -e 90d)
+if [[ -z "$HEADSCALE_KEY" ]]; then
+    echo "ERROR: Failed to create API key. Is headscale running?"
+    supervisorctl status headscale
+    cat /var/log/supervisor/headscale.err.log
+    exit 1
+fi
 
 cat > /opt/headplane/.env <<EOF
 HEADSCALE_URL=http://127.0.0.1:8080
@@ -192,8 +227,9 @@ EOF
 
 cat > /etc/supervisor/conf.d/headplane.conf <<EOF
 [program:headplane]
-command=bash -c 'set -a; source /opt/headplane/.env; set +a; exec /usr/bin/npm start'
+command=/usr/bin/node --env-file=/opt/headplane/.env /opt/headplane/.output/server/index.mjs
 directory=/opt/headplane
+environment=HOME="/root",PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 autostart=true
 autorestart=true
 startretries=5
