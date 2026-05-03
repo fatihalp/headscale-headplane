@@ -96,11 +96,12 @@ curl -so /etc/headscale/config.yaml \
   "https://raw.githubusercontent.com/juanfont/headscale/v${HEADSCALE_VERSION}/config-example.yaml"
 
 if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
-    sed -i "s|server_url: .*|server_url: https://${DOMAIN}|g" /etc/headscale/config.yaml
+    sed -i "s|^server_url: .*|server_url: https://${DOMAIN}|g" /etc/headscale/config.yaml
 else
-    sed -i "s|server_url: .*|server_url: http://${DOMAIN}|g"  /etc/headscale/config.yaml
+    sed -i "s|^server_url: .*|server_url: http://${DOMAIN}|g"  /etc/headscale/config.yaml
 fi
-sed -i "s|listen_addr: .*|listen_addr: 127.0.0.1:8080|g" /etc/headscale/config.yaml
+sed -i "s|^listen_addr: .*|listen_addr: 127.0.0.1:8080|g" /etc/headscale/config.yaml
+sed -i "s|^grpc_listen_addr: .*|grpc_listen_addr: 127.0.0.1:50443|g" /etc/headscale/config.yaml
 
 # ------------------------------------------------------------------------------
 # 2/4  Headscale supervisor service + Nginx reverse-proxy
@@ -119,14 +120,27 @@ stdout_logfile=/var/log/supervisor/headscale.out.log
 user=root
 EOF
 
-# Start supervisord if not running (crucial for Docker/WSL)
+# Ensure port 8080 is clear (might be held by a failed process)
+if command -v fuser >/dev/null 2>&1; then
+    fuser -k 8080/tcp || true
+fi
+
+# Start supervisord if not running
 if ! pgrep -x supervisord > /dev/null; then
-    /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+    if [ -f /etc/init.d/supervisor ]; then
+        /etc/init.d/supervisor start
+    else
+        /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+    fi
     sleep 2
 fi
 
 supervisorctl update
-supervisorctl restart headscale
+supervisorctl start headscale || {
+    echo "ERROR: Headscale failed to start (spawn error). Showing error logs:"
+    cat /var/log/supervisor/headscale.err.log
+    exit 1
+}
 
 cat > /etc/nginx/sites-available/headscale <<EOF
 server {
