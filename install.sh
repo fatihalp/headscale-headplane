@@ -98,6 +98,12 @@ if [[ -z "$INSTALL_SSL" ]]; then
     read -rp "Install SSL Certificate (Let's Encrypt)? (y/n): " INSTALL_SSL
 fi
 
+if ! command -v openssl >/dev/null 2>&1; then
+    echo "Bootstrapping openssl for secret generation..."
+    apt-get update -qq
+    apt-get install -y --no-install-recommends openssl ca-certificates
+fi
+
 if [[ -z "$ADMIN_PASS" ]]; then
     ADMIN_PASS=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 20 || true)
     warn "No --admin-pass provided. Generated: ${BOLD}${ADMIN_PASS}${NC}  ← save this!"
@@ -107,6 +113,13 @@ COOKIE_SECRET=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32 || tru
 
 # Resolve protocol once — avoids the "http${INSTALL_SSL:+s}" pitfall
 if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then PROTO="https"; else PROTO="http"; fi
+
+# Bootstrap minimal network tooling before preflight
+if ! command -v curl >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
+    echo "Bootstrapping curl and openssl for preflight checks..."
+    apt-get update -qq
+    apt-get install -y --no-install-recommends curl openssl ca-certificates
+fi
 
 # ════════════════════════════════════════════════════════════
 # PREFLIGHT
@@ -169,7 +182,7 @@ step 1 "System dependencies"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    curl gnupg git wget jq ca-certificates iproute2 \
+    curl gnupg git wget jq openssl ca-certificates iproute2 \
     nginx supervisor certbot python3-certbot-nginx
 ok "Base packages installed"
 
