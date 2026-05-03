@@ -61,7 +61,7 @@ echo "=================================================="
 echo "0/4: Updating system and installing dependencies..."
 apt-get update
 apt-get install -y curl gnupg git wget jq
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 apt-get install -y nodejs nginx supervisor certbot python3-certbot-nginx
 
 # ------------------------------------------------------------------------------
@@ -184,7 +184,7 @@ ln -sf /etc/nginx/sites-available/headscale /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && service nginx reload
 
-[[ "$INSTALL_SSL" =~ ^[Yy]$ ]] && certbot --nginx -d "${DOMAIN}"
+[[ "$INSTALL_SSL" =~ ^[Yy]$ ]] && certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d "${DOMAIN}"
 
 # ------------------------------------------------------------------------------
 # 3/4  Headplane (Node.js web UI)
@@ -225,11 +225,20 @@ BASIC_AUTH_USER=admin
 BASIC_AUTH_PASS=${ADMIN_PASS}
 EOF
 
+# Create headplane startup wrapper (sources .env, uses correct build output path)
+cat > /opt/headplane/start.sh <<'STARTSH'
+#!/bin/bash
+set -a
+source /opt/headplane/.env
+set +a
+exec /usr/bin/node /opt/headplane/build/server/index.js
+STARTSH
+chmod +x /opt/headplane/start.sh
+
 cat > /etc/supervisor/conf.d/headplane.conf <<EOF
 [program:headplane]
-command=/usr/bin/node --env-file=/opt/headplane/.env /opt/headplane/.output/server/index.mjs
+command=/opt/headplane/start.sh
 directory=/opt/headplane
-environment=HOME="/root",PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 autostart=true
 autorestart=true
 startretries=5
@@ -263,7 +272,7 @@ EOF
 ln -sf /etc/nginx/sites-available/headplane /etc/nginx/sites-enabled/
 nginx -t && service nginx reload
 
-[[ "$INSTALL_SSL" =~ ^[Yy]$ ]] && certbot --nginx -d "${UI_DOMAIN}"
+[[ "$INSTALL_SSL" =~ ^[Yy]$ ]] && certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d "${UI_DOMAIN}"
 
 # ------------------------------------------------------------------------------
 # Done
